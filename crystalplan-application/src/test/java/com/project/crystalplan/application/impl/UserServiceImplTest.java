@@ -4,7 +4,7 @@ import com.project.crystalplan.domain.enums.NotificationType;
 import com.project.crystalplan.domain.enums.Recurrence;
 import com.project.crystalplan.domain.exceptions.EntityNotFoundException;
 import com.project.crystalplan.domain.exceptions.InvalidArgumentException;
-import com.project.crystalplan.domain.exceptions.InvalidCredentialsException; // Import the new exception
+import com.project.crystalplan.domain.exceptions.InvalidCredentialsException;
 import com.project.crystalplan.domain.models.Event;
 import com.project.crystalplan.domain.models.User;
 import com.project.crystalplan.domain.repositories.UserRepository;
@@ -16,17 +16,19 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.ArrayList; // Changed from Collections.emptyList to ArrayList for the loop
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,12 +40,17 @@ class UserServiceImplTest {
     @Mock
     private EventService eventService;
 
+    @Mock
+    private BCryptPasswordEncoder passwordEncoder;
+
     @InjectMocks
     private UserServiceImpl userService;
 
     private User sampleUser;
     private User updatedUser;
     private User loginUser;
+    private final String plainPassword = "Password@123";
+    private final String encodedPassword = "$2a$10$encodedPasswordExample";
 
     @BeforeEach
     void setUp() {
@@ -54,7 +61,7 @@ class UserServiceImplTest {
         sampleUser.setUuid(UUID.randomUUID().toString());
         sampleUser.setName("John Doe");
         sampleUser.setEmail("john.doe@example.com");
-        sampleUser.setPassword("Password@123");
+        sampleUser.setPassword(plainPassword);
         sampleUser.setBirthday(LocalDate.of(2000, 1, 1));
         sampleUser.setCreatedAt(pastTime);
         sampleUser.setUpdatedAt(pastTime);
@@ -71,7 +78,7 @@ class UserServiceImplTest {
         loginUser.setUuid(UUID.randomUUID().toString());
         loginUser.setName("Login User");
         loginUser.setEmail("login@example.com");
-        loginUser.setPassword("Password@123");
+        loginUser.setPassword(encodedPassword); // Senha já codificada no banco
         loginUser.setBirthday(LocalDate.of(1990, 1, 1));
         loginUser.setCreatedAt(pastTime.minusHours(1));
         loginUser.setUpdatedAt(pastTime.minusHours(1));
@@ -81,10 +88,8 @@ class UserServiceImplTest {
     @Test
     void createUser_ShouldSaveUserAndGenerateBirthdayEvents() {
         when(userRepository.existsByEmail(sampleUser.getEmail())).thenReturn(false);
-        // Using thenReturn(argument) is simpler than thenAnswer for returning the same argument
+        when(passwordEncoder.encode(plainPassword)).thenReturn(encodedPassword);
         when(userRepository.save(any(User.class))).thenReturn(sampleUser);
-
-        // Mock eventService.createEvent to return a dummy Event for each call
         when(eventService.createEvent(any(Event.class))).thenReturn(new Event());
 
         User createdUser = userService.createUser(sampleUser);
@@ -96,14 +101,18 @@ class UserServiceImplTest {
         assertNotNull(capturedUser.getUuid());
         assertNotNull(capturedUser.getCreatedAt());
         assertNotNull(capturedUser.getUpdatedAt());
-        // Use isAfter or isEqual to avoid issues with precise time comparison
-        assertTrue(capturedUser.getCreatedAt().isEqual(LocalDateTime.now()) || capturedUser.getCreatedAt().isAfter(sampleUser.getCreatedAt().minusSeconds(1)));
-        assertTrue(capturedUser.getUpdatedAt().isEqual(LocalDateTime.now()) || capturedUser.getUpdatedAt().isAfter(sampleUser.getUpdatedAt().minusSeconds(1)));
+        assertTrue(capturedUser.getCreatedAt().isEqual(LocalDateTime.now()) ||
+                capturedUser.getCreatedAt().isAfter(sampleUser.getCreatedAt().minusSeconds(1)));
+        assertTrue(capturedUser.getUpdatedAt().isEqual(LocalDateTime.now()) ||
+                capturedUser.getUpdatedAt().isAfter(sampleUser.getUpdatedAt().minusSeconds(1)));
         assertTrue(capturedUser.isActive());
         assertEquals(sampleUser.getName(), capturedUser.getName());
         assertEquals(sampleUser.getEmail(), capturedUser.getEmail());
 
-        // Verify that 20 birthday events are created
+        // Verificar se a senha foi codificada
+        verify(passwordEncoder).encode(plainPassword);
+
+        // Verificar que 20 eventos de aniversário são criados
         verify(eventService, times(20)).createEvent(any(Event.class));
         assertEquals(capturedUser.getName(), createdUser.getName());
         assertEquals(capturedUser.getEmail(), createdUser.getEmail());
@@ -118,33 +127,39 @@ class UserServiceImplTest {
 
         assertEquals("Já existe um usuário com este e-mail.", exception.getMessage());
         verify(userRepository, never()).save(any(User.class));
+        verify(passwordEncoder, never()).encode(anyString());
     }
 
     @Test
     void createUser_ShouldThrowInvalidArgumentExceptionForInvalidName() {
         sampleUser.setName("");
-        InvalidArgumentException exception = assertThrows(InvalidArgumentException.class, () -> userService.createUser(sampleUser));
+        InvalidArgumentException exception = assertThrows(InvalidArgumentException.class, () ->
+                userService.createUser(sampleUser));
         assertEquals("O nome é obrigatório.", exception.getMessage());
     }
 
     @Test
     void createUser_ShouldThrowInvalidArgumentExceptionForInvalidEmail() {
         sampleUser.setEmail("invalid-email");
-        InvalidArgumentException exception = assertThrows(InvalidArgumentException.class, () -> userService.createUser(sampleUser));
+        InvalidArgumentException exception = assertThrows(InvalidArgumentException.class, () ->
+                userService.createUser(sampleUser));
         assertEquals("E-mail inválido ou não informado.", exception.getMessage());
     }
 
     @Test
     void createUser_ShouldThrowInvalidArgumentExceptionForInvalidPassword() {
         sampleUser.setPassword("short");
-        InvalidArgumentException exception = assertThrows(InvalidArgumentException.class, () -> userService.createUser(sampleUser));
-        assertEquals("A senha deve ter pelo menos 8 caracteres, incluindo letra, número e caractere especial.", exception.getMessage());
+        InvalidArgumentException exception = assertThrows(InvalidArgumentException.class, () ->
+                userService.createUser(sampleUser));
+        assertEquals("A senha deve ter pelo menos 8 caracteres, incluindo letra, número e caractere especial.",
+                exception.getMessage());
     }
 
     @Test
     void createUser_ShouldThrowInvalidArgumentExceptionForNullBirthday() {
         sampleUser.setBirthday(null);
-        InvalidArgumentException exception = assertThrows(InvalidArgumentException.class, () -> userService.createUser(sampleUser));
+        InvalidArgumentException exception = assertThrows(InvalidArgumentException.class, () ->
+                userService.createUser(sampleUser));
         assertEquals("Data de nascimento é obrigatória.", exception.getMessage());
     }
 
@@ -161,12 +176,11 @@ class UserServiceImplTest {
 
     @Test
     void shouldReturnEmptyOptionalWhenGettingNonExistentUserById() {
-        // Updated: Service now returns Optional.empty()
         when(userRepository.findByIdAndActiveTrue("non-existent-id")).thenReturn(Optional.empty());
 
         Optional<User> result = userService.getUserById("non-existent-id");
 
-        assertTrue(result.isEmpty()); // Assert that the Optional is empty
+        assertTrue(result.isEmpty());
         verify(userRepository).findByIdAndActiveTrue("non-existent-id");
     }
 
@@ -183,12 +197,11 @@ class UserServiceImplTest {
 
     @Test
     void shouldReturnEmptyOptionalWhenGettingNonExistentUserByEmail() {
-        // Updated: Service now returns Optional.empty()
         when(userRepository.findByEmailAndActiveTrue("nonexistent@example.com")).thenReturn(Optional.empty());
 
         Optional<User> result = userService.getUserByEmail("nonexistent@example.com");
 
-        assertTrue(result.isEmpty()); // Assert that the Optional is empty
+        assertTrue(result.isEmpty());
         verify(userRepository).findByEmailAndActiveTrue("nonexistent@example.com");
     }
 
@@ -199,13 +212,15 @@ class UserServiceImplTest {
         existingUserForUpdate.setUuid(sampleUser.getUuid());
         existingUserForUpdate.setName(sampleUser.getName());
         existingUserForUpdate.setEmail(sampleUser.getEmail());
-        existingUserForUpdate.setPassword(sampleUser.getPassword());
+        existingUserForUpdate.setPassword(encodedPassword); // Senha já codificada
         existingUserForUpdate.setBirthday(sampleUser.getBirthday());
         existingUserForUpdate.setCreatedAt(sampleUser.getCreatedAt());
         existingUserForUpdate.setUpdatedAt(sampleUser.getUpdatedAt());
         existingUserForUpdate.setActive(true);
 
         when(userRepository.findByIdAndActiveTrue(sampleUser.getId())).thenReturn(Optional.of(existingUserForUpdate));
+        when(passwordEncoder.matches("NewPassword@123", encodedPassword)).thenReturn(false);
+        when(passwordEncoder.encode("NewPassword@123")).thenReturn("$2a$10$newEncodedPassword");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         User result = userService.updateUser(sampleUser.getId(), updatedUser);
@@ -217,15 +232,45 @@ class UserServiceImplTest {
         assertEquals(sampleUser.getId(), capturedUser.getId());
         assertEquals(updatedUser.getName(), capturedUser.getName());
         assertEquals(updatedUser.getEmail(), capturedUser.getEmail());
-        assertEquals(updatedUser.getPassword(), capturedUser.getPassword());
         assertEquals(updatedUser.getBirthday(), capturedUser.getBirthday());
         assertNotNull(capturedUser.getUpdatedAt());
-        // Allow a slight time difference for updatedAt
-        assertTrue(capturedUser.getUpdatedAt().isAfter(existingUserForUpdate.getUpdatedAt().minusSeconds(1)) || capturedUser.getUpdatedAt().isEqual(existingUserForUpdate.getUpdatedAt()), "updatedAt should be after or equal to original");
+        assertTrue(capturedUser.getUpdatedAt().isAfter(existingUserForUpdate.getUpdatedAt().minusSeconds(1)) ||
+                capturedUser.getUpdatedAt().isEqual(existingUserForUpdate.getUpdatedAt()));
         assertTrue(capturedUser.isActive());
+
+        // Verificar se a senha foi recodificada
+        verify(passwordEncoder).matches("NewPassword@123", encodedPassword);
+        verify(passwordEncoder).encode("NewPassword@123");
 
         assertEquals(capturedUser, result);
         verify(userRepository).findByIdAndActiveTrue(sampleUser.getId());
+    }
+
+    @Test
+    void shouldNotReencodePasswordWhenSamePasswordOnUpdate() {
+        User existingUserForUpdate = new User();
+        existingUserForUpdate.setId(sampleUser.getId());
+        existingUserForUpdate.setUuid(sampleUser.getUuid());
+        existingUserForUpdate.setName(sampleUser.getName());
+        existingUserForUpdate.setEmail(sampleUser.getEmail());
+        existingUserForUpdate.setPassword(encodedPassword);
+        existingUserForUpdate.setBirthday(sampleUser.getBirthday());
+        existingUserForUpdate.setCreatedAt(sampleUser.getCreatedAt());
+        existingUserForUpdate.setUpdatedAt(sampleUser.getUpdatedAt());
+        existingUserForUpdate.setActive(true);
+
+        // Usando a mesma senha
+        updatedUser.setPassword(plainPassword);
+
+        when(userRepository.findByIdAndActiveTrue(sampleUser.getId())).thenReturn(Optional.of(existingUserForUpdate));
+        when(passwordEncoder.matches(plainPassword, encodedPassword)).thenReturn(true);
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        userService.updateUser(sampleUser.getId(), updatedUser);
+
+        // Verificar que a senha não foi recodificada
+        verify(passwordEncoder).matches(plainPassword, encodedPassword);
+        verify(passwordEncoder, never()).encode(plainPassword);
     }
 
     @Test
@@ -235,7 +280,6 @@ class UserServiceImplTest {
         EntityNotFoundException exception = assertThrows(EntityNotFoundException.class, () ->
                 userService.updateUser("non-existent-id", updatedUser));
 
-        // Updated message to match the UserServiceImpl
         assertEquals("Usuário não encontrado para atualização ou inativo.", exception.getMessage());
         verify(userRepository).findByIdAndActiveTrue("non-existent-id");
         verify(userRepository, never()).save(any(User.class));
@@ -265,8 +309,8 @@ class UserServiceImplTest {
 
         assertFalse(capturedUser.isActive());
         assertNotNull(capturedUser.getUpdatedAt());
-        // Allow a slight time difference for updatedAt
-        assertTrue(capturedUser.getUpdatedAt().isAfter(existingUserForDelete.getUpdatedAt().minusSeconds(1)) || capturedUser.getUpdatedAt().isEqual(existingUserForDelete.getUpdatedAt()), "updatedAt should be after or equal to original");
+        assertTrue(capturedUser.getUpdatedAt().isAfter(existingUserForDelete.getUpdatedAt().minusSeconds(1)) ||
+                capturedUser.getUpdatedAt().isEqual(existingUserForDelete.getUpdatedAt()));
 
         verify(userRepository).findByIdAndActiveTrue(sampleUser.getId());
     }
@@ -278,7 +322,6 @@ class UserServiceImplTest {
         EntityNotFoundException exception = assertThrows(EntityNotFoundException.class, () ->
                 userService.deleteUser("non-existent-id"));
 
-        // Updated message to match the UserServiceImpl
         assertEquals("Usuário não encontrado para exclusão ou já inativo.", exception.getMessage());
         verify(userRepository).findByIdAndActiveTrue("non-existent-id");
         verify(userRepository, never()).save(any());
@@ -287,34 +330,37 @@ class UserServiceImplTest {
     @Test
     void shouldLoginSuccessfully() {
         when(userRepository.findByEmailAndActiveTrue(loginUser.getEmail())).thenReturn(Optional.of(loginUser));
+        when(passwordEncoder.matches(plainPassword, encodedPassword)).thenReturn(true);
 
-        Optional<User> result = userService.login(loginUser.getEmail(), loginUser.getPassword());
+        Optional<User> result = userService.login(loginUser.getEmail(), plainPassword);
 
         assertTrue(result.isPresent());
         assertEquals(loginUser, result.get());
         verify(userRepository).findByEmailAndActiveTrue(loginUser.getEmail());
+        verify(passwordEncoder).matches(plainPassword, encodedPassword);
     }
 
     @Test
     void shouldThrowInvalidCredentialsExceptionWhenPasswordDoesNotMatchOnLogin() {
         when(userRepository.findByEmailAndActiveTrue(loginUser.getEmail())).thenReturn(Optional.of(loginUser));
+        when(passwordEncoder.matches("wrongPassword", encodedPassword)).thenReturn(false);
 
-        // Updated: Now expects InvalidCredentialsException
         InvalidCredentialsException exception = assertThrows(InvalidCredentialsException.class, () ->
                 userService.login(loginUser.getEmail(), "wrongPassword"));
 
         assertEquals("Senha inválida.", exception.getMessage());
         verify(userRepository).findByEmailAndActiveTrue(loginUser.getEmail());
+        verify(passwordEncoder).matches("wrongPassword", encodedPassword);
     }
 
     @Test
     void shouldReturnEmptyOptionalWhenUserNotFoundOnLogin() {
-        // Updated: Service now returns Optional.empty()
         when(userRepository.findByEmailAndActiveTrue("nonexistent@example.com")).thenReturn(Optional.empty());
 
         Optional<User> result = userService.login("nonexistent@example.com", "anypassword");
 
-        assertTrue(result.isEmpty()); // Assert that the Optional is empty
+        assertTrue(result.isEmpty());
         verify(userRepository).findByEmailAndActiveTrue("nonexistent@example.com");
+        verify(passwordEncoder, never()).matches(anyString(), anyString());
     }
 }

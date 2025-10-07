@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.project.crystalplan.infrastructure.persistence.mongo.repository.impl.NotificationSettingsRepositoryImplTest
 -------------------------------------------------------------------------------
-Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.091 s -- in com.project.crystalplan.infrastructure.persistence.mongo.repository.impl.NotificationSettingsRepositoryImplTest
+Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.082 s -- in com.project.crystalplan.infrastructure.persistence.mongo.repository.impl.NotificationSettingsRepositoryImplTest

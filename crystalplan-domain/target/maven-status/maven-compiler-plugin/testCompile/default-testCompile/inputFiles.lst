@@ -1,4 +1,4 @@
-/home/emanuel/Documentos/CrystalPlan/CrystalPlan-Backend/crystalplan-domain/src/test/java/com/project/crystalplan/domain/models/EventTest.java
-/home/emanuel/Documentos/CrystalPlan/CrystalPlan-Backend/crystalplan-domain/src/test/java/com/project/crystalplan/domain/models/NotificationLogTest.java
-/home/emanuel/Documentos/CrystalPlan/CrystalPlan-Backend/crystalplan-domain/src/test/java/com/project/crystalplan/domain/models/NotificationSettingsTest.java
-/home/emanuel/Documentos/CrystalPlan/CrystalPlan-Backend/crystalplan-domain/src/test/java/com/project/crystalplan/domain/models/UserTest.java
+/home/emanuel/Documentos/CrystalPlan/CrystalPlan-Back-End/crystalplan-domain/src/test/java/com/project/crystalplan/domain/models/EventTest.java
+/home/emanuel/Documentos/CrystalPlan/CrystalPlan-Back-End/crystalplan-domain/src/test/java/com/project/crystalplan/domain/models/NotificationLogTest.java
+/home/emanuel/Documentos/CrystalPlan/CrystalPlan-Back-End/crystalplan-domain/src/test/java/com/project/crystalplan/domain/models/NotificationSettingsTest.java
+/home/emanuel/Documentos/CrystalPlan/CrystalPlan-Back-End/crystalplan-domain/src/test/java/com/project/crystalplan/domain/models/UserTest.java

@@ -8,21 +8,23 @@ import org.springframework.stereotype.Component;
 
 import java.security.Key;
 import java.util.Date;
+import java.nio.charset.StandardCharsets;
 
 @Component
 public class JwtTokenProvider {
 
-    @Value("${JWT_SECURITY}")
-    private String secretKey;
+    // Chave fixa temporária para testar (32+ caracteres)
+    private static final String FIXED_SECRET = "mySecretKeyForJWTTokenGeneration123456789012";
 
-    @Value("${jwt.expiration}")
+    @Value("${jwt.expiration:86400000}")
     private long validityInMilliseconds;
 
     private Key key;
 
     @PostConstruct
     protected void init() {
-        this.key = Keys.hmacShaKeyFor(secretKey.getBytes());
+        // Usar chave fixa para eliminar problemas de configuração
+        this.key = Keys.hmacShaKeyFor(FIXED_SECRET.getBytes(StandardCharsets.UTF_8));
     }
 
     public String createToken(String userId, String email) {
@@ -56,4 +58,3 @@ public class JwtTokenProvider {
                 .getSubject();
     }
 }
-
